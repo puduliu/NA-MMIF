@@ -16,6 +16,9 @@ Official implementation of **NA-MMIF**.
 
 ## Requirements
 
+- Python 3.10
+- PyTorch 2.5.1 + CUDA 12.1
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -23,6 +26,7 @@ pip install -r requirements.txt
 ---
 
 ## Inference
+
 **Multi-Exposure Fusion (MEFB):**
 
 ```bash
