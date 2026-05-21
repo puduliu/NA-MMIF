@@ -1,0 +1,130 @@
+import argparse
+import traceback
+import shutil
+import logging
+import yaml
+import sys
+import os
+import torch
+import numpy as np
+
+from diffusion.diffusion_fuse_CT_adaptive_pixel import Diffusion
+
+from predict_CT_MRI_pixel import fuse
+
+torch.set_printoptions(sci_mode=False)
+
+
+def parse_args_and_config():
+    parser = argparse.ArgumentParser(description=globals()["__doc__"])
+
+    parser.add_argument(
+        "--config", type=str, required=True, help="Path to the config file"
+    )
+    parser.add_argument("--seed", type=int, default=1234, help="Random seed")
+    parser.add_argument(
+        "--exp", type=str, default="exp", help="Path for saving running related data."
+    )
+    parser.add_argument(
+        "--doc",
+        type=str,
+        help="A string for documentation purpose. "
+        "Will be the name of the log folder.",
+    )
+    parser.add_argument(
+        "--comment", type=str, default="", help="A string for experiment comment"
+    )
+    parser.add_argument(
+        "--verbose",
+        type=str,
+        default="info",
+        help="Verbose level: info | debug | warning | critical",
+    )
+    parser.add_argument(
+        "--sample",
+        action="store_true",
+        help="Whether to produce samples from the model",
+    )
+    parser.add_argument(
+        "-i",
+        "--image_folder",
+        type=str,
+        default="images",
+        help="The folder name of samples",
+    )
+    parser.add_argument(
+        "--ni",
+        action="store_true",
+        help="No interaction. Suitable for Slurm Job launcher",
+    )
+    parser.add_argument(
+        "--timesteps", type=int, default=20, help="number of steps involved"
+    )
+    parser.add_argument(
+        "--deg", type=str, default="deno", help="denoise"
+    )
+    parser.add_argument(
+        "--sigma_0", type=float, help="Sigma_0"
+    )
+    parser.add_argument(
+        "--eta", type=float, default=0.85, help="Eta"
+    )
+    parser.add_argument(
+        "--etaB", type=float, default=1, help="Eta_b (before)"
+    )
+    parser.add_argument(
+        '--subset_start', type=int, default=-1
+    )
+    parser.add_argument(
+        '--subset_end', type=int, default=-1
+    )
+
+    args = parser.parse_args()
+
+    # parse config file
+    with open(os.path.join("configs", args.config), "r") as f:
+        config = yaml.safe_load(f)
+    new_config = dict2namespace(config)
+
+    # add device
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    logging.info("Using device: {}".format(device))
+    new_config.device = device
+
+    # set random seed
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+
+    torch.backends.cudnn.benchmark = True
+
+    return args, new_config
+
+
+def dict2namespace(config):
+    namespace = argparse.Namespace()
+    for key, value in config.items():
+        if isinstance(value, dict):
+            new_value = dict2namespace(value)
+        else:
+            new_value = value
+        setattr(namespace, key, new_value)
+    return namespace
+
+
+def main():
+    args, config = parse_args_and_config()
+    try:
+        runner = Diffusion(args, config)
+        runner.sample()
+    except Exception:
+        logging.error(traceback.format_exc())
+
+    fuse()
+    
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
